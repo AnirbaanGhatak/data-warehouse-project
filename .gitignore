@@ -1,0 +1,7 @@
+multi-cloud/terraform.tfvars
+multi-cloud/variables.tf
+multi-cloud/outputs.tf
+
+gcp-only/terraform.tfvars
+gcp-only/variables.tf
+gcp-only/outputs.tf
