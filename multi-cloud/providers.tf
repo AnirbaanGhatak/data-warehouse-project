@@ -19,5 +19,5 @@ provider "aws" {
 # Configure GCP (Analytics Side)
 provider "google" {
   project = var.gcp-project_name
-  region  = "my region"           
+  region  = var.gcp-project_region           
 }

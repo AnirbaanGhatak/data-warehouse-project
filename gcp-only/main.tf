@@ -1,6 +1,6 @@
 provider "google" {
   project = var.gcp_project
-  region  = var.gcp_region
+  impersonate_service_account = "terraform-gcp@multi-cloud-warehouse.iam.gserviceaccount.com"
 }
 
 resource "google_storage_bucket" "data-lake" {
@@ -9,16 +9,48 @@ resource "google_storage_bucket" "data-lake" {
   storage_class = "STANDARD"
 
   uniform_bucket_level_access = true
+  hierarchical_namespace {
+    enabled = true
+  }
 
   force_destroy = true
 }
 
+resource "google_storage_folder" "raw_crm" {
+  bucket = google_storage_bucket.data-lake.name
+  name = "raw_crm/"
+}
+
+resource "google_storage_folder" "raw_erp" {
+  bucket = google_storage_bucket.data-lake.name
+  name = "raw_erp/"
+}
+
+resource "google_storage_bucket_object" "crm_files" {
+  for_each = fileset("${path.module}/../datasets/crm", "**")
+
+  name = "raw_crm/${each.value}"
+
+  source = "${path.module}/../datasets/crm/${each.value}"
+
+  bucket = google_storage_bucket.data-lake.name
+}
+
+resource "google_storage_bucket_object" "erp_files" {
+  for_each = fileset("${path.module}/../datasets/erp", "**")
+
+  name = "raw_erp/${each.value}"
+
+  source = "${path.module}/../datasets/erp/${each.value}"
+
+  bucket = google_storage_bucket.data-lake.name
+}
 
 #--------------------------BRONZE LAYER------------------------------------
 
 #------------------------------CRM-----------------------------------------
 resource "google_bigquery_dataset" "bronze_layer" {
-  dataset_id    = "retail bronze"
+  dataset_id    = "retail_bronze"
   friendly_name = "Bronze Layer"
   description   = "This is the Bronze layer of the Medallion Architecture, here raw data directly from CSV is only copied"
 
@@ -29,42 +61,41 @@ resource "google_bigquery_dataset" "bronze_layer" {
 resource "google_bigquery_table" "bronze_crm_cust_info" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_crm_cust_info"
-
-  schema = jsondecode(
+  deletion_protection = false
+  schema = jsonencode(
     [
-      { "name" : "cst_id",
-        "type" : "INT",
-        "description" : "customer id from CRM"
+      { name : "cst_id",
+        type : "INTEGER",
+        description : "customer id from CRM"
+      },
+      { name : "cst_key",
+        type : "STRING",
+        description : "customer key from CRM"
       },
 
-      { "name" : "cst_key",
-        "type" : "STRING",
-        "description" : "customer key from CRM"
+      { name : "cst_firstname",
+        type : "STRING",
+        description : "customer firstname from CRM"
       },
 
-      { "name" : "cst_firstname",
-        "type" : "STRING",
-        "description" : "customer firstname from CRM"
+      { name : "cst_lastname",
+        type : "STRING",
+        description : "customer lastname from CRM"
       },
 
-      { "name" : "cst_lastname",
-        "type" : "STRING",
-        "description" : "customer lastname from CRM"
+      { name : "cst_marital_status",
+        type : "STRING",
+        description : "customer marital status from CRM"
       },
 
-      { "name" : "cst_marital_status",
-        "type" : "STRING",
-        "description" : "customer marital status from CRM"
+      { name : "cst_gndr",
+        type : "STRING",
+        description : "customer gender from CRM"
       },
 
-      { "name" : "cst_gndr",
-        "type" : "STRING",
-        "description" : "customer gender from CRM"
-      },
-
-      { "name" : "cst_create_date",
-        "type" : "DATE",
-        "description" : "customer create_date from CRM"
+      { name : "cst_create_date",
+        type : "DATE",
+        description : "customer create_date from CRM"
       },
     ]
   )
@@ -73,42 +104,43 @@ resource "google_bigquery_table" "bronze_crm_cust_info" {
 resource "google_bigquery_table" "bronze_crm_prod_info" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_crm_prod_info"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "prd_id",
-        "type" : "INT",
-        "description" : "product id from CRM"
+      { name : "prd_id",
+        type : "INTEGER",
+        description : "product id from CRM"
       },
 
-      { "name" : "prd_key",
-        "type" : "STRING",
-        "description" : "product key from CRM"
+      { name : "prd_key",
+        type : "STRING",
+        description : "product key from CRM"
       },
 
-      { "name" : "prd_nm",
-        "type" : "STRING",
-        "description" : "product number from CRM"
+      { name : "prd_nm",
+        type : "STRING",
+        description : "product number from CRM"
       },
 
-      { "name" : "prd_cost",
-        "type" : "INT",
-        "description" : "product cost from CRM"
+      { name : "prd_cost",
+        type : "INTEGER",
+        description : "product cost from CRM"
       },
 
-      { "name" : "prd_line",
-        "type" : "STRING",
-        "description" : "product line(type of product ig?) from CRM"
+      { name : "prd_line",
+        type : "STRING",
+        description : "product line(type of product ig?) from CRM"
       },
 
-      { "name" : "prd_start_dt",
-        "type" : "DATETIME",
-        "description" : "product start (the day product is created or in inventory, start of cost) from CRM"
+      { name : "prd_start_dt",
+        type : "DATETIME",
+        description : "product start (the day product is created or in inventory, start of cost) from CRM"
       },
 
-      { "name" : "prd_end_dt",
-        "type" : "DATETIME",
-        "description" : "product end (the day product is ended or in inventory, end of a particular cost) from CRM"
+      { name : "prd_end_dt",
+        type : "DATETIME",
+        description : "product end (the day product is ended or in inventory, end of a particular cost) from CRM"
       },
     ]
   )
@@ -118,50 +150,51 @@ resource "google_bigquery_table" "bronze_crm_prod_info" {
 resource "google_bigquery_table" "bronze_crm_sales_details" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_crm_sales_details"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "sls_ord_num",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "sls_ord_num",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "sls_prd_key",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "sls_prd_key",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "sls_cust_id",
-        "type" : "INT",
-        "description" : "customer whom the sales regards to from CRM"
+      { name : "sls_cust_id",
+        type : "INTEGER",
+        description : "customer whom the sales regards to from CRM"
       },
 
-      { "name" : "sls_order_dt",
-        "type" : "INT",
-        "description" : "order date from CRM"
+      { name : "sls_order_dt",
+        type : "INTEGER",
+        description : "order date from CRM"
       },
 
-      { "name" : "sls_ship_dt",
-        "type" : "INT",
-        "description" : "shipping date from CRM"
+      { name : "sls_ship_dt",
+        type : "INTEGER",
+        description : "shipping date from CRM"
       },
 
-      { "name" : "sls_due_dt",
-        "type" : "INT",
-        "description" : "due date from CRM"
+      { name : "sls_due_dt",
+        type : "INTEGER",
+        description : "due date from CRM"
       },
 
-      { "name" : "sls_sales",
-        "type" : "INT",
-        "description" : "total cost of the product (quantity * price) from CRM"
+      { name : "sls_sales",
+        type : "INTEGER",
+        description : "total cost of the product (quantity * price) from CRM"
       },
-      { "name" : "sls_quantity",
-        "type" : "INT",
-        "description" : "quantity of the product from CRM"
+      { name : "sls_quantity",
+        type : "INTEGER",
+        description : "quantity of the product from CRM"
       },
-      { "name" : "sls_price",
-        "type" : "INT",
-        "description" : "price of the product from CRM"
+      { name : "sls_price",
+        type : "INTEGER",
+        description : "price of the product from CRM"
       },
     ]
   )
@@ -173,17 +206,18 @@ resource "google_bigquery_table" "bronze_crm_sales_details" {
 resource "google_bigquery_table" "bronze_erp_loc_a101" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_erp_loc_a101"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "cid",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "cid",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "cntry",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "cntry",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
     ]
   )
@@ -192,21 +226,22 @@ resource "google_bigquery_table" "bronze_erp_loc_a101" {
 resource "google_bigquery_table" "bronze_erp_cust_az12" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_erp_loc_a101"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "cid",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "cid",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "bdate",
-        "type" : "DATE",
-        "description" : "sales product key from CRM"
+      { name : "bdate",
+        type : "DATE",
+        description : "sales product key from CRM"
       },
-      { "name" : "gen",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "gen",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
     ]
   )
@@ -215,27 +250,28 @@ resource "google_bigquery_table" "bronze_erp_cust_az12" {
 resource "google_bigquery_table" "bronze_px_cat_g1v2" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "bronze_erp_loc_a101"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "id",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "id",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "cat",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "cat",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "suncat",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "suncat",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "maintenance",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "maINTEGERenance",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
     ]
   )
@@ -245,7 +281,7 @@ resource "google_bigquery_table" "bronze_px_cat_g1v2" {
 
 #-----------------------------CRM--------------------------------------------------------
 resource "google_bigquery_dataset" "silver_layer" {
-  dataset_id    = "retail silver"
+  dataset_id    = "retail_silver"
   friendly_name = "Silver Layer"
   description   = "This is the Silver layer of the Medallion Architecture, here first layer of transformed data from Bronze Layer is only copied"
 
@@ -256,53 +292,55 @@ resource "google_bigquery_dataset" "silver_layer" {
 resource "google_bigquery_table" "silver_crm_cust_info" {
   dataset_id = google_bigquery_dataset.silver_layer.dataset_id
   table_id   = "silver_crm_cust_info"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "cst_id"
-        "type" : "INT"
-        "mode" : "REQUIRED"
-        "description" : "customer id from bronze"
+      { name : "cst_id"
+        type : "INTEGER"
+        mode : "REQUIRED"
+        description : "customer id from bronze"
       },
 
-      { "name" : "cst_key"
-        "type" : "REQUIRED"
-        "description" : "customer key from bronze"
+      { name : "cst_key"
+        type : "STRING"
+        mode : "REQUIRED"
+        description : "customer key from bronze"
       },
 
-      { "name" : "cst_firstname"
-        "type" : "STRING"
-        "type" : "REQUIRED"
-        "description" : "customer firstname from bronze"
+      { name : "cst_firstname"
+        type : "STRING"
+        mode : "REQUIRED"
+        description : "customer firstname from bronze"
       },
 
-      { "name" : "cst_lastname"
-        "type" : "STRING"
-        "type" : "REQUIRED"
-        "description" : "customer lastname from bronze"
+      { name : "cst_lastname"
+        type : "STRING"
+        mode : "REQUIRED"
+        description : "customer lastname from bronze"
       },
 
-      { "name" : "cst_marital_status"
-        "type" : "STRING"
-        "type" : "REQUIRED"
-        "description" : "customer marital status from bronze"
+      { name : "cst_marital_status"
+        type : "STRING"
+        mode : "REQUIRED"
+        description : "customer marital status from bronze"
       },
 
-      { "name" : "cst_gndr"
-        "type" : "STRING"
-        "type" : "REQUIRED"
-        "description" : "customer gender from bronze"
+      { name : "cst_gndr"
+        type : "STRING"
+        mode : "REQUIRED"
+        description : "customer gender from bronze"
       },
 
-      { "name" : "cst_create_date"
-        "type" : "DATE"
-        "type" : "REQUIRED"
-        "description" : "customer create_date from bronze"
+      { name : "cst_create_date"
+        type : "DATE"
+        mode : "REQUIRED"
+        description : "customer create_date from bronze"
       },
 
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
       },
     ]
   )
@@ -311,52 +349,53 @@ resource "google_bigquery_table" "silver_crm_cust_info" {
 resource "google_bigquery_table" "silver_crm_prod_info" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
   table_id   = "silver_crm_prod_info"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "prd_id",
-        "type" : "INT",
-        "description" : "product id from bronze"
+      { name : "prd_id",
+        type : "INTEGER",
+        description : "product id from bronze"
       },
 
-      { "name" : "cat_id",
-        "type" : "STRING",
-        "description" : "splitting the product key from bronze"
+      { name : "cat_id",
+        type : "STRING",
+        description : "splitting the product key from bronze"
       },
 
-      { "name" : "prd_key",
-        "type" : "STRING",
-        "description" : "product number from bronze"
+      { name : "prd_key",
+        type : "STRING",
+        description : "product number from bronze"
       },
 
-      { "name" : "prd_nm",
-        "type" : "STRING",
-        "description" : "product number from bronze"
+      { name : "prd_nm",
+        type : "STRING",
+        description : "product number from bronze"
       },
 
-      { "name" : "prd_cost",
-        "type" : "INT",
-        "description" : "product cost from bronze"
+      { name : "prd_cost",
+        type : "INTEGER",
+        description : "product cost from bronze"
       },
 
-      { "name" : "prd_line",
-        "type" : "STRING",
-        "description" : "product line(type of product ig?) from bronze"
+      { name : "prd_line",
+        type : "STRING",
+        description : "product line(type of product ig?) from bronze"
       },
 
-      { "name" : "prd_start_dt",
-        "type" : "DATE",
-        "description" : "product start (the day product is created or in inventory, start of cost) from bronze"
+      { name : "prd_start_dt",
+        type : "DATE",
+        description : "product start (the day product is created or in inventory, start of cost) from bronze"
       },
 
-      { "name" : "prd_end_dt",
-        "type" : "DATE",
-        "description" : "product end (the day product is ended or in inventory, end of a particular cost) from bronze"
+      { name : "prd_end_dt",
+        type : "DATE",
+        description : "product end (the day product is ended or in inventory, end of a particular cost) from bronze"
       },
 
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
       },
     ]
   )
@@ -365,54 +404,55 @@ resource "google_bigquery_table" "silver_crm_prod_info" {
 resource "google_bigquery_table" "silver_crm_sales_details" {
   dataset_id = google_bigquery_dataset.silver_layer.dataset_id
   table_id   = "silver_crm_sales_details"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "sls_ord_num",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "sls_ord_num",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "sls_prd_key",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "sls_prd_key",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "sls_cust_id",
-        "type" : "INT",
-        "description" : "customer whom the sales regards to from CRM"
+      { name : "sls_cust_id",
+        type : "INTEGER",
+        description : "customer whom the sales regards to from CRM"
       },
 
-      { "name" : "sls_order_dt",
-        "type" : "INT",
-        "description" : "order date from CRM"
+      { name : "sls_order_dt",
+        type : "INTEGER",
+        description : "order date from CRM"
       },
 
-      { "name" : "sls_ship_dt",
-        "type" : "INT",
-        "description" : "shipping date from CRM"
+      { name : "sls_ship_dt",
+        type : "INTEGER",
+        description : "shipping date from CRM"
       },
 
-      { "name" : "sls_due_dt",
-        "type" : "INT",
-        "description" : "due date from CRM"
+      { name : "sls_due_dt",
+        type : "INTEGER",
+        description : "due date from CRM"
       },
 
-      { "name" : "sls_sales",
-        "type" : "INT",
-        "description" : "total cost of the product (quantity * price) from CRM"
+      { name : "sls_sales",
+        type : "INTEGER",
+        description : "total cost of the product (quantity * price) from CRM"
       },
-      { "name" : "sls_quantity",
-        "type" : "INT",
-        "description" : "quantity of the product from CRM"
+      { name : "sls_quantity",
+        type : "INTEGER",
+        description : "quantity of the product from CRM"
       },
-      { "name" : "sls_price",
-        "type" : "INT",
-        "description" : "price of the product from CRM"
+      { name : "sls_price",
+        type : "INTEGER",
+        description : "price of the product from CRM"
       },
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
       },
     ]
   )
@@ -425,22 +465,23 @@ resource "google_bigquery_table" "silver_crm_sales_details" {
 resource "google_bigquery_table" "silver_erp_loc_a101" {
   dataset_id = google_bigquery_dataset.silver_layer.dataset_id
   table_id   = "silver_erp_loc_a101"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "cid",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "cid",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "cntry",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "cntry",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
       },
     ]
   )
@@ -449,26 +490,27 @@ resource "google_bigquery_table" "silver_erp_loc_a101" {
 resource "google_bigquery_table" "silver_erp_cust_az12" {
   dataset_id = google_bigquery_dataset.silver_layer.dataset_id
   table_id   = "silver_erp_cust_az12"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "cid",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "cid",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "bdate",
-        "type" : "DATE",
-        "description" : "sales product key from CRM"
+      { name : "bdate",
+        type : "DATE",
+        description : "sales product key from CRM"
       },
-      { "name" : "gen",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "gen",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
       },
     ]
   )
@@ -477,33 +519,34 @@ resource "google_bigquery_table" "silver_erp_cust_az12" {
 resource "google_bigquery_table" "silver_px_cat_g1v2" {
   dataset_id = google_bigquery_dataset.silver_layer.dataset_id
   table_id   = "silver_px_cat_g1v2"
+  deletion_protection = false
 
-  schema = jsondecode(
+  schema = jsonencode(
     [
-      { "name" : "id",
-        "type" : "STRING",
-        "description" : "sales order number from CRM"
+      { name : "id",
+        type : "STRING",
+        description : "sales order number from CRM"
       },
 
-      { "name" : "cat",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "cat",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "suncat",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "suncat",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "maintenance",
-        "type" : "STRING",
-        "description" : "sales product key from CRM"
+      { name : "maINTEGERenance",
+        type : "STRING",
+        description : "sales product key from CRM"
       },
 
-      { "name" : "dwh_create_date",
-        "type" : "DATETIME",
-        "description" : "Time when the rows were added"
-      },
+      { name : "dwh_create_date",
+        type : "DATETIME",
+        description : "Time when the rows were added"
+      }
     ]
   )
 }
@@ -514,7 +557,7 @@ resource "google_bigquery_table" "silver_px_cat_g1v2" {
 #------------------------------GOLD LAYER --------------------------------------------
 
 resource "google_bigquery_dataset" "gold_layer" {
-  dataset_id    = "retail gold"
+  dataset_id    = "retail_gold"
   friendly_name = "Gold Layer"
   description   = "This is the Gold layer of the Medallion Architecture, this equivalent of a View in SQL"
 
@@ -526,6 +569,7 @@ resource "google_bigquery_dataset" "gold_layer" {
 resource "google_bigquery_table" "gold_dim_customers" {
   dataset_id = google_bigquery_dataset.gold_layer.dataset_id
   table_id   = "gold_dim_customers"
+  deletion_protection = false
 
   view {
     use_legacy_sql = false
@@ -540,10 +584,10 @@ resource "google_bigquery_table" "gold_dim_customers" {
                     ci.cst_marital_status AS marital_status, 
                     CASE 
                       WHEN ci.cst_gndr != 'n/a' THEN ci.cst_gndr 
-                      ELSE COALESCE(ca.gen, 'n/a'), 
+                      ELSE COALESCE(ca.gen, 'n/a') 
+                    END AS gender
                     ca.bdate AS birthdate, 
                     ci.cst_create_date AS create_date 
-                    
                   FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_cust_info` ci 
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.silver_erp_cust_az12` ca 
                     ON ci.cst_key = ca.cid 
@@ -555,9 +599,9 @@ EOT
 
   }
 
-  depends_on = [  google_bigquery_dataset.silver_layer.silver_crm_cust_info, 
-                  google_bigquery_dataset.silver_layer.silver_erp_cust_az12, 
-                  google_bigquery_dataset.silver_layer.silver_erp_loc_a101 ]
+  depends_on = [  google_bigquery_table.silver_crm_cust_info, 
+                  google_bigquery_table.silver_erp_cust_az12, 
+                  google_bigquery_table.silver_erp_loc_a101 ]
 
 }
 
@@ -565,6 +609,7 @@ EOT
 resource "google_bigquery_table" "gold_dim_products" {
   dataset_id = google_bigquery_dataset.gold_layer.dataset_id
   table_id   = "gold_dim_customers"
+  deletion_protection = false
 
   view {
     use_legacy_sql = false
@@ -580,7 +625,7 @@ resource "google_bigquery_table" "gold_dim_products" {
                     pn.cat_id       AS category_id,
                     pc.cat          AS category,
                     pc.subcat       AS subcategory,
-                    pc.maintenance  AS maintenance,
+                    pc.maINTEGERenance  AS maINTEGERenance,
                     pn.prd_cost     AS cost,
                     pn.prd_line     AS product_line,
                     pn.prd_start_dt AS start_date
@@ -598,6 +643,7 @@ EOT
 resource "google_bigquery_table" "gold_fact_sales" {
   dataset_id = google_bigquery_dataset.gold_layer.dataset_id
   table_id   = "gold_dim_customers"
+  deletion_protection = false
 
   view {
     use_legacy_sql = false
@@ -619,7 +665,7 @@ resource "google_bigquery_table" "gold_fact_sales" {
                       ON sd.sls_cust_id = cu.customer_id
 EOT
   }
-  depends_on = [  google_bigquery_dataset.gold_layer.dim_products,
-                  google_bigquery_dataset.gold_layer.dim_customers ]
+  depends_on = [  google_bigquery_table.gold_dim_customers,
+                  google_bigquery_table.gold_dim_products ]
 }
 
