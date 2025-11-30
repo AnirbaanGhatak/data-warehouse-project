@@ -13,11 +13,11 @@ terraform {
 
 # Configure AWS (Ingestion Side)
 provider "aws" {
-  region = var.aws_region 
+  region = var.aws-region 
 }
 
 # Configure GCP (Analytics Side)
 provider "google" {
-  project = var.gcp_project 
+  project = var.gcp-project_name
   region  = "my region"           
 }

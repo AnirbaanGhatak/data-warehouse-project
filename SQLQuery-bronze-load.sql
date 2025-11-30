@@ -121,3 +121,5 @@ BEGIN
 		PRINT '==============ERROR OCCURED:'+ CAST(ERROR_STATE() AS NVARCHAR) + '==============';
 	END CATCH
 END
+
+SELECT * from bronze.crm_cust_info
