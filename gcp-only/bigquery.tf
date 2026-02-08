@@ -177,7 +177,7 @@ resource "google_bigquery_table" "bronze_erp_loc_a101" {
 
 resource "google_bigquery_table" "bronze_erp_cust_az12" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
-  table_id   = "bronze_erp_loc_a101"
+  table_id   = "bronze_erp_cust_az12"
   deletion_protection = false
 
   schema = jsonencode(
@@ -201,7 +201,7 @@ resource "google_bigquery_table" "bronze_erp_cust_az12" {
 
 resource "google_bigquery_table" "bronze_px_cat_g1v2" {
   dataset_id = google_bigquery_dataset.bronze_layer.dataset_id
-  table_id   = "bronze_erp_loc_a101"
+  table_id   = "bronze_px_cat_g1v2"
   deletion_protection = false
 
   schema = jsonencode(
@@ -525,7 +525,7 @@ resource "google_bigquery_table" "gold_dim_customers" {
 
   view {
     use_legacy_sql = false
-    query = <<-EOT
+    query = <<-EOF
                   SELECT 
                     ROW_NUMBER() OVER (ORDER BY cst_id) AS customer_key,
                     ci.cst_id AS customer_id, 
@@ -537,7 +537,7 @@ resource "google_bigquery_table" "gold_dim_customers" {
                     CASE 
                       WHEN ci.cst_gndr != 'n/a' THEN ci.cst_gndr 
                       ELSE COALESCE(ca.gen, 'n/a') 
-                    END AS gender
+                    END AS gender,
                     ca.bdate AS birthdate, 
                     ci.cst_create_date AS create_date 
                   FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_cust_info` ci 
@@ -545,7 +545,7 @@ resource "google_bigquery_table" "gold_dim_customers" {
                     ON ci.cst_key = ca.cid 
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.silver_erp_loc_a101` la 
                     ON ci.cst_key = la.cid
-EOT
+EOF
 
 
 
@@ -560,7 +560,7 @@ EOT
 
 resource "google_bigquery_table" "gold_dim_products" {
   dataset_id = google_bigquery_dataset.gold_layer.dataset_id
-  table_id   = "gold_dim_customers"
+  table_id   = "gold_dim_products"
   deletion_protection = false
 
   view {
@@ -568,7 +568,7 @@ resource "google_bigquery_table" "gold_dim_products" {
     
     # Using <<EOF prevents indentation errors. 
     # Make sure the closing 'EOF' is at the very start of the line.
-    query = <<-EOT
+    query = <<-EOF
                   SELECT
                     ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt, pn.prd_key) AS product_key,
                     pn.prd_id       AS product_id,
@@ -577,7 +577,7 @@ resource "google_bigquery_table" "gold_dim_products" {
                     pn.cat_id       AS category_id,
                     pc.cat          AS category,
                     pc.subcat       AS subcategory,
-                    pc.maINTEGERenance  AS maINTEGERenance,
+                    pc.maintenence  AS maintenence,
                     pn.prd_cost     AS cost,
                     pn.prd_line     AS product_line,
                     pn.prd_start_dt AS start_date
@@ -585,21 +585,21 @@ resource "google_bigquery_table" "gold_dim_products" {
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.erp_px_cat_g1v2` pc
                     ON pn.cat_id = pc.id
                   WHERE pn.prd_end_dt IS NULL    
-EOT
+EOF
   }
 
-  depends_on = [  google_bigquery_table.bronze_crm_cust_info,
-                  google_bigquery_table.bronze_px_cat_g1v2 ]
+  depends_on = [  google_bigquery_table.silver_crm_cust_info,
+                  google_bigquery_table.silver_px_cat_g1v2 ]
 }
 
 resource "google_bigquery_table" "gold_fact_sales" {
   dataset_id = google_bigquery_dataset.gold_layer.dataset_id
-  table_id   = "gold_dim_customers"
+  table_id   = "gold_dim_sales"
   deletion_protection = false
 
   view {
     use_legacy_sql = false
-    query = <<-EOT
+    query = <<-EOF
                     SELECT
                       sd.sls_ord_num  AS order_number,
                       pr.product_key  AS product_key,
@@ -615,7 +615,7 @@ resource "google_bigquery_table" "gold_fact_sales" {
                       ON sd.sls_prd_key = pr.product_number
                     LEFT JOIN `${google_bigquery_dataset.gold_layer.dataset_id}.dim_products` cu
                       ON sd.sls_cust_id = cu.customer_id
-EOT
+EOF
   }
   depends_on = [  google_bigquery_table.gold_dim_customers,
                   google_bigquery_table.gold_dim_products ]

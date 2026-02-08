@@ -33,33 +33,19 @@ resource "google_storage_bucket" "function_source" {
   force_destroy = true
 }
 
-# resource "google_storage_folder" "raw_crm" {
-#   bucket = google_storage_bucket.data-lake.name
-#   name = "raw_crm/"
-# }
+resource "google_storage_bucket_object" "crm_folder" {
 
-# resource "google_storage_folder" "raw_erp" {
-#   bucket = google_storage_bucket.data-lake.name
-#   name = "raw_erp/"
-# }
+  name = "raw_crm/"
+  content = ""
 
-# resource "google_storage_bucket_object" "crm_files" {
-#   for_each = fileset("${path.module}/../datasets/crm", "**")
+  bucket = google_storage_bucket.data-lake.name
+}
 
-#   name = "raw_crm/${each.value}"
+resource "google_storage_bucket_object" "erp_folder" {
 
-#   source = "${path.module}/../datasets/crm/${each.value}"
+  name = "raw_crm/"
+  content = ""
 
-#   bucket = google_storage_bucket.data-lake.name
-# }
-
-# resource "google_storage_bucket_object" "erp_files" {
-#   for_each = fileset("${path.module}/../datasets/erp", "**")
-
-#   name = "raw_erp/${each.value}"
-
-#   source = "${path.module}/../datasets/erp/${each.value}"
-
-#   bucket = google_storage_bucket.data-lake.name
-# }
+  bucket = google_storage_bucket.data-lake.name
+}
 
