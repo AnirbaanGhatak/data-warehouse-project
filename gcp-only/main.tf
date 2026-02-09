@@ -36,15 +36,15 @@ resource "google_storage_bucket" "function_source" {
 resource "google_storage_bucket_object" "crm_folder" {
 
   name = "raw_crm/"
-  content = ""
+  content = " "
 
   bucket = google_storage_bucket.data-lake.name
 }
 
 resource "google_storage_bucket_object" "erp_folder" {
 
-  name = "raw_crm/"
-  content = ""
+  name = "raw_erp/"
+  content = " "
 
   bucket = google_storage_bucket.data-lake.name
 }
