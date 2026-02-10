@@ -16,15 +16,6 @@ resource "google_storage_bucket" "data-lake" {
   force_destroy = true
 }
 
-# 1. THE DATA LAKE (Raw Data)
-resource "google_storage_bucket" "data_lake" {
-  name          = var.bucket_name
-  location      = var.gcp_region
-  storage_class = "STANDARD"
-  uniform_bucket_level_access = true
-  force_destroy = true # For dev only
-}
-
 # 2. FUNCTION SOURCE BUCKET (Stores the Zipped Python Code)
 resource "google_storage_bucket" "function_source" {
   name          = "${var.bucket_name}-source"

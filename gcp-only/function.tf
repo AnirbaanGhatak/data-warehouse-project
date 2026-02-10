@@ -47,7 +47,7 @@ resource "google_cloudfunctions2_function" "elt_function" {
 
     event_filters {
       attribute = "bucket"
-      value     = google_storage_bucket.data_lake.name
+      value     = google_storage_bucket.data-lake.name
     }
   }
 

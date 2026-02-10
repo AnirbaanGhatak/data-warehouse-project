@@ -485,12 +485,12 @@ resource "google_bigquery_table" "silver_px_cat_g1v2" {
         description : "sales product key from CRM"
       },
 
-      { name : "suncat",
+      { name : "subcat",
         type : "STRING",
         description : "sales product key from CRM"
       },
 
-      { name : "maINTEGERenance",
+      { name : "maintenence",
         type : "STRING",
         description : "sales product key from CRM"
       },
@@ -574,21 +574,21 @@ resource "google_bigquery_table" "gold_dim_products" {
                     pn.prd_id       AS product_id,
                     pn.prd_key      AS product_number,
                     pn.prd_nm       AS product_name,
-                    pn.cst_id       AS category_id,
+                    pn.cat_id       AS category_id,
                     pc.cat          AS category,
                     pc.subcat       AS subcategory,
                     pc.maintenence  AS maintenence,
                     pn.prd_cost     AS cost,
                     pn.prd_line     AS product_line,
                     pn.prd_start_dt AS start_date
-                  FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_cust_info` pn
+                  FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_prod_info` pn
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.silver_px_cat_g1v2` pc
                     ON pn.cat_id = pc.id
                   WHERE pn.prd_end_dt IS NULL    
 EOF
   }
 
-  depends_on = [  google_bigquery_table.silver_crm_cust_info,
+  depends_on = [  google_bigquery_table.silver_crm_prod_info,
                   google_bigquery_table.silver_px_cat_g1v2 ]
 }
 
@@ -610,10 +610,10 @@ resource "google_bigquery_table" "gold_fact_sales" {
                       sd.sls_sales    AS sales_amount,
                       sd.sls_quantity AS quantity,
                       sd.sls_price    AS price
-                    FROM `${google_bigquery_dataset.silver_layer.dataset_id}.crm_sales_details` sd
-                    LEFT JOIN `${google_bigquery_dataset.gold_layer.dataset_id}.dim_products` pr
+                    FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_sales_details` sd
+                    LEFT JOIN `${google_bigquery_dataset.gold_layer.dataset_id}.gold_dim_products` pr
                       ON sd.sls_prd_key = pr.product_number
-                    LEFT JOIN `${google_bigquery_dataset.gold_layer.dataset_id}.dim_products` cu
+                    LEFT JOIN `${google_bigquery_dataset.gold_layer.dataset_id}.gold_dim_customers` cu
                       ON sd.sls_cust_id = cu.customer_id
 EOF
   }
