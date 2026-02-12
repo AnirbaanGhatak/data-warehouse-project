@@ -37,3 +37,18 @@ resource "google_project_iam_member" "run_invoker" {
   role    = "roles/run.invoker"
   member  = "serviceAccount:${google_service_account.elt_invoker.email}"
 }
+
+resource "google_project_iam_member" "eventarc_receiver" {
+  project = var.gcp_project
+  role    = "roles/eventarc.eventReceiver"
+  member  = "serviceAccount:${google_service_account.elt_invoker.email}"
+}
+
+data "google_storage_project_service_account" "gcs_account" {
+}
+
+resource "google_project_iam_member" "gcs_pubsub_publishing" {
+  project = var.gcp_project
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${data.google_storage_project_service_account.gcs_account.email_address}"
+}

@@ -34,7 +34,7 @@ def process_data_pipeline(cloud_event):
     domain = None
     # --- 2. ROUTING LOGIC ---
     # Map filenames to Target Tables
-    if file_path.startswith("crm"):
+    if "raw_crm" in file_path:
         domain = "crm"
 
         if "cust_info" in file_path:
@@ -43,15 +43,15 @@ def process_data_pipeline(cloud_event):
             target_table = "bronze_crm_prod_info"
         elif "sales_details" in file_path:
             target_table = "bronze_crm_sales_details"
-
-    elif file_path.startswith("erp"):
+            
+    elif "raw_erp" in file_path:
         domain = "erp"
 
-        if "a101" in file_path:
+        if "loc_a101" in file_path:
             target_table = "bronze_erp_loc_a101"
-        elif "az12" in file_path:
+        elif "cust_az12" in file_path:
             target_table = "bronze_erp_cust_az12"
-        elif "g1v2" in file_path:
+        elif "cat_g1v2" in file_path:
             target_table = "bronze_px_cat_g1v2"
     else:
         logging.warning(f"SKIP: Unknown file pattern: {file_path}")
@@ -65,7 +65,7 @@ def process_data_pipeline(cloud_event):
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.CSV,
         skip_leading_rows=1,
-        autodetect=False, # In Prod, we might use a predefined schema, but auto is fine for Bronze
+        autodetect=True, # In Prod, we might use a predefined schema, but auto is fine for Bronze
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         allow_jagged_rows=True,
         allow_quoted_newlines=True
@@ -95,6 +95,7 @@ def process_data_pipeline(cloud_event):
 def generate_silver_sql(bronze_table_name, project_id):
     """
     Generates the SQL transformation logic dynamically.
+    FIXED: Commas, LENGTH(), and Date Types.
     """
     if bronze_table_name == "bronze_crm_cust_info":
         return f"""
@@ -102,26 +103,34 @@ def generate_silver_sql(bronze_table_name, project_id):
         SELECT
             cst_id,
             cst_key,
-            TRIM(cst_firstname) AS first_name,
-            TRIM(cst_lastname) AS last_name,
-            CASE 
-                WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
-                WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
-                ELSE 'Unknown'
-            END AS marital_status,
-            CASE 
-                WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
-                WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
-                ELSE 'Unknown'
-            END AS gender,
-            PARSE_DATE('%Y-%m-%d', cst_create_date) AS create_date
+            first_name,
+            last_name,
+            marital_status,
+            gender,
+            create_date
         FROM (
             SELECT
-                *,
+                cst_id,
+                cst_key,
+                TRIM(cst_firstname) AS first_name,
+                TRIM(cst_lastname) AS last_name,
+                CASE 
+                    WHEN UPPER(TRIM(cst_marital_status)) = 'S' THEN 'Single'
+                    WHEN UPPER(TRIM(cst_marital_status)) = 'M' THEN 'Married'
+                    ELSE 'Unknown'
+                END AS marital_status,
+                CASE 
+                    WHEN UPPER(TRIM(cst_gndr)) = 'F' THEN 'Female'
+                    WHEN UPPER(TRIM(cst_gndr)) = 'M' THEN 'Male'
+                    ELSE 'Unknown'
+                END AS gender,
+                cst_create_date AS create_date, -- FIXED: Removed PARSE_DATE, it is already a DATE
                 ROW_NUMBER() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS row_num
             FROM `{project_id}.retail_bronze.bronze_crm_cust_info`
         )
+        WHERE row_num = 1
         """
+
     elif bronze_table_name == "bronze_crm_prod_info":
         return f"""
         CREATE OR REPLACE TABLE `{project_id}.retail_silver.silver_crm_prod_info` AS
@@ -136,10 +145,14 @@ def generate_silver_sql(bronze_table_name, project_id):
                 WHEN UPPER(TRIM(prd_line)) = 'R' THEN 'Road'
                 ELSE 'Other'
             END AS product_line,
-            CAST(prd_start_dt AS DATE) AS start_date
-            DATE_SUB(LEAD(prd_start_dt) OVER (PARTITION BY prd_key ORDER BY prd_start_dt), INTERVAL 1 DAY) AS prd_end_dt
+            CAST(prd_start_dt AS DATE) AS start_date, -- FIXED: Added Comma here
+            DATE_SUB(
+                LEAD(CAST(prd_start_dt AS DATE)) OVER (PARTITION BY prd_key ORDER BY prd_start_dt), 
+                INTERVAL 1 DAY
+            ) AS prd_end_dt
         FROM `{project_id}.retail_bronze.bronze_crm_prod_info`
         """
+
     elif bronze_table_name == "bronze_crm_sales_details":
         return f"""
         CREATE OR REPLACE TABLE `{project_id}.retail_silver.silver_crm_sales_details` AS
@@ -148,27 +161,27 @@ def generate_silver_sql(bronze_table_name, project_id):
             sls_prd_key,
             sls_cust_id,
             CASE 
-                WHEN sls_order_dt = 0 OR LEN(sls_order_dt) != 8 THEN NULL
-                ELSE CAST(CAST(sls_order_dt AS VARCHAR) AS DATE)
+                WHEN sls_order_dt = 0 OR LENGTH(CAST(sls_order_dt AS STRING)) != 8 THEN NULL -- FIXED: LEN -> LENGTH
+                ELSE PARSE_DATE('%Y%m%d', CAST(sls_order_dt AS STRING))
             END AS sls_order_dt,
             CASE 
-                WHEN sls_ship_dt = 0 OR LEN(sls_ship_dt) != 8 THEN NULL
-                ELSE CAST(CAST(sls_ship_dt AS VARCHAR) AS DATE)
+                WHEN sls_ship_dt = 0 OR LENGTH(CAST(sls_ship_dt AS STRING)) != 8 THEN NULL
+                ELSE PARSE_DATE('%Y%m%d', CAST(sls_ship_dt AS STRING))
             END AS sls_ship_dt,
             CASE 
-                WHEN sls_due_dt = 0 OR LEN(sls_due_dt) != 8 THEN NULL
-                ELSE CAST(CAST(sls_due_dt AS VARCHAR) AS DATE)
+                WHEN sls_due_dt = 0 OR LENGTH(CAST(sls_due_dt AS STRING)) != 8 THEN NULL
+                ELSE PARSE_DATE('%Y%m%d', CAST(sls_due_dt AS STRING))
             END AS sls_due_dt,
             CASE 
                 WHEN sls_sales IS NULL OR sls_sales <= 0 OR sls_sales != sls_quantity * ABS(sls_price) 
                     THEN sls_quantity * ABS(sls_price)
                 ELSE sls_sales
-            END AS sls_sales,                                            -- Recalculate sales if original value is missing or incorrect
+            END AS sls_sales,
             sls_quantity,
             CASE 
                 WHEN sls_price IS NULL OR sls_price <= 0 
-                    THEN sls_sales / NULLIF(sls_quantity, 0)
-                ELSE sls_price                                           -- Derive price if original value is invalid
+                    THEN SAFE_DIVIDE(sls_sales, sls_quantity)
+                ELSE sls_price
             END AS sls_price
         FROM `{project_id}.retail_bronze.bronze_crm_sales_details`
         """
@@ -183,28 +196,28 @@ def generate_silver_sql(bronze_table_name, project_id):
                 WHEN TRIM(country) IN ('US', 'USA') THEN 'United States'
                 WHEN TRIM(country) = '' OR country IS NULL THEN 'n/a'
                 ELSE TRIM(country)
-            END AS country -- Normalize and Handle missing or blank country codes
+            END AS country
         FROM `{project_id}.retail_bronze.bronze_erp_loc_a101`
-    """
+        """
 
     elif bronze_table_name == "bronze_erp_cust_az12":
-        return f""""
+        return f"""
         CREATE OR REPLACE TABLE `{project_id}.retail_silver.silver_erp_cust_az12` AS
         SELECT
             CASE
-                WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4, LEN(cid)) -- Remove 'NAS' prefix if present
+                WHEN cid LIKE 'NAS%' THEN SUBSTRING(cid, 4, LENGTH(cid)) -- FIXED: LEN -> LENGTH
                 ELSE cid
             END AS cid, 
             CASE
-                WHEN bdate > GETDATE() THEN NULL
+                WHEN bdate > CURRENT_DATE() THEN NULL -- FIXED: GETDATE() -> CURRENT_DATE()
                 ELSE bdate
-            END AS bdate, -- Set future birthdates to NULL
+            END AS bdate,
             CASE
                 WHEN UPPER(TRIM(gen)) IN ('F', 'FEMALE') THEN 'Female'
                 WHEN UPPER(TRIM(gen)) IN ('M', 'MALE') THEN 'Male'
                 ELSE 'n/a'
-            END AS gen -- Normalize gender values and handle unknown cases
-        FROM {project_id}.retail_bronze.bronze_erp_cust_az12
+            END AS gen
+        FROM `{project_id}.retail_bronze.bronze_erp_cust_az12` -- FIXED: Added backticks
         """
     
 
@@ -218,3 +231,5 @@ def generate_silver_sql(bronze_table_name, project_id):
             maintenance
         FROM `{project_id}.retail_bronze.bronze_px_cat_g1v2`
         """
+    
+    return None

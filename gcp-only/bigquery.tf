@@ -216,12 +216,12 @@ resource "google_bigquery_table" "bronze_px_cat_g1v2" {
         description : "sales product key from CRM"
       },
 
-      { name : "suncat",
+      { name : "subcat",
         type : "STRING",
         description : "sales product key from CRM"
       },
 
-      { name : "maINTEGERenance",
+      { name : "maintenance",
         type : "STRING",
         description : "sales product key from CRM"
       },
@@ -490,7 +490,7 @@ resource "google_bigquery_table" "silver_px_cat_g1v2" {
         description : "sales product key from CRM"
       },
 
-      { name : "maintenence",
+      { name : "maintenance",
         type : "STRING",
         description : "sales product key from CRM"
       },
@@ -577,7 +577,7 @@ resource "google_bigquery_table" "gold_dim_products" {
                     pn.cat_id       AS category_id,
                     pc.cat          AS category,
                     pc.subcat       AS subcategory,
-                    pc.maintenence  AS maintenence,
+                    pc.maintenance  AS maintenance,
                     pn.prd_cost     AS cost,
                     pn.prd_line     AS product_line,
                     pn.prd_start_dt AS start_date

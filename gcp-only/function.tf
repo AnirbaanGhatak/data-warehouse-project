@@ -27,7 +27,7 @@ resource "google_cloudfunctions2_function" "elt_function" {
   }
 
   service_config {
-    max_instance_count = 1 # Keep it simple for now (Avoid race conditions)
+    max_instance_count = 3 # Keep it simple for now (Avoid race conditions)
     available_memory   = "512M"
     timeout_seconds    = 300 # 5 minutes to process the file
 
@@ -51,6 +51,6 @@ resource "google_cloudfunctions2_function" "elt_function" {
     }
   }
 
-  depends_on = [google_project_iam_member.bq_data_editor, google_project_iam_member.bq_job_user, google_project_iam_member.run_invoker, google_project_iam_member.gcs_viewer]
+  depends_on = [google_project_iam_member.bq_data_editor, google_project_iam_member.bq_job_user, google_project_iam_member.run_invoker, google_project_iam_member.gcs_viewer, google_project_iam_member.eventarc_receiver]
 
 }
