@@ -107,7 +107,8 @@ def generate_silver_sql(bronze_table_name, project_id):
             last_name,
             marital_status,
             gender,
-            create_date
+            create_date,
+            dwh_create_date
         FROM (
             SELECT
                 cst_id,
@@ -125,7 +126,8 @@ def generate_silver_sql(bronze_table_name, project_id):
                     ELSE 'Unknown'
                 END AS gender,
                 cst_create_date AS create_date, -- FIXED: Removed PARSE_DATE, it is already a DATE
-                ROW_NUMBER() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS row_num
+                ROW_NUMBER() OVER (PARTITION BY cst_id ORDER BY cst_create_date DESC) AS row_num,
+                CURRENT_DATETIME() AS dwh_create_date
             FROM `{project_id}.retail_bronze.bronze_crm_cust_info`
         )
         WHERE row_num = 1
@@ -149,7 +151,8 @@ def generate_silver_sql(bronze_table_name, project_id):
             DATE_SUB(
                 LEAD(CAST(prd_start_dt AS DATE)) OVER (PARTITION BY prd_key ORDER BY prd_start_dt), 
                 INTERVAL 1 DAY
-            ) AS prd_end_dt
+            ) AS prd_end_dt,
+            CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_crm_prod_info`
         """
 
@@ -182,9 +185,13 @@ def generate_silver_sql(bronze_table_name, project_id):
                 WHEN sls_price IS NULL OR sls_price <= 0 
                     THEN SAFE_DIVIDE(sls_sales, sls_quantity)
                 ELSE sls_price
-            END AS sls_price
+            END AS sls_price,
+            CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_crm_sales_details`
         """
+    
+#---------------------------------ERP---------------------------------------------
+
     
     elif bronze_table_name ==  "bronze_erp_loc_a101":
         return f"""
@@ -196,7 +203,8 @@ def generate_silver_sql(bronze_table_name, project_id):
                 WHEN TRIM(country) IN ('US', 'USA') THEN 'United States'
                 WHEN TRIM(country) = '' OR country IS NULL THEN 'n/a'
                 ELSE TRIM(country)
-            END AS country
+            END AS country,
+            CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_erp_loc_a101`
         """
 
@@ -216,7 +224,8 @@ def generate_silver_sql(bronze_table_name, project_id):
                 WHEN UPPER(TRIM(gen)) IN ('F', 'FEMALE') THEN 'Female'
                 WHEN UPPER(TRIM(gen)) IN ('M', 'MALE') THEN 'Male'
                 ELSE 'n/a'
-            END AS gen
+            END AS gen,
+            CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_erp_cust_az12` -- FIXED: Added backticks
         """
     
@@ -228,7 +237,8 @@ def generate_silver_sql(bronze_table_name, project_id):
             id,
             cat,
             subcat,
-            maintenance
+            maintenance,
+            CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_px_cat_g1v2`
         """
     

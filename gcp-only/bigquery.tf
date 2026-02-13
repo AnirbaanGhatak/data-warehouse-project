@@ -89,10 +89,9 @@ resource "google_bigquery_table" "bronze_crm_prod_info" {
         type : "DATETIME",
         description : "product start (the day product is created or in inventory, start of cost) from CRM"
       },
-
       { name : "prd_end_dt",
         type : "DATETIME",
-        description : "product end (the day product is ended or in inventory, end of a particular cost) from CRM"
+        description : "product end (the day product is created or in inventory, start of cost) from CRM"
       },
     ]
   )
@@ -248,45 +247,45 @@ resource "google_bigquery_table" "silver_crm_cust_info" {
 
   schema = jsonencode(
     [
-      { name : "cst_id"
-        type : "INTEGER"
-        mode : "REQUIRED"
+      { name : "cst_id",
+        type : "INTEGER",
+        mode : "REQUIRED",
         description : "customer id from bronze"
       },
 
-      { name : "cst_key"
-        type : "STRING"
-        mode : "REQUIRED"
+      { name : "cst_key",
+        type : "STRING",
+        mode : "REQUIRED",
         description : "customer key from bronze"
       },
 
-      { name : "cst_firstname"
-        type : "STRING"
-        mode : "REQUIRED"
+      { name : "firstname",
+        type : "STRING",
+        mode : "REQUIRED",
         description : "customer firstname from bronze"
       },
 
-      { name : "cst_lastname"
-        type : "STRING"
-        mode : "REQUIRED"
+      { name : "lastname",
+        type : "STRING",
+        mode : "REQUIRED",
         description : "customer lastname from bronze"
       },
 
-      { name : "cst_marital_status"
-        type : "STRING"
-        mode : "REQUIRED"
+      { name : "marital_status",
+        type : "STRING",
+        mode : "REQUIRED",
         description : "customer marital status from bronze"
       },
 
-      { name : "cst_gndr"
-        type : "STRING"
-        mode : "REQUIRED"
+      { name : "gndr",
+        type : "STRING",
+        mode : "REQUIRED",
         description : "customer gender from bronze"
       },
 
-      { name : "cst_create_date"
-        type : "DATE"
-        mode : "REQUIRED"
+      { name : "create_date",
+        type : "DATE",
+        mode : "REQUIRED",
         description : "customer create_date from bronze"
       },
 
@@ -527,19 +526,19 @@ resource "google_bigquery_table" "gold_dim_customers" {
     use_legacy_sql = false
     query = <<-EOF
                   SELECT 
-                    ROW_NUMBER() OVER (ORDER BY cst_id) AS customer_key,
+                    ROW_NUMBER() OVER (ORDER BY ci.cst_id) AS customer_key,
                     ci.cst_id AS customer_id, 
                     ci.cst_key AS customer_number, 
-                    ci.cst_firstname AS first_name, 
-                    ci.cst_lastname AS last_name, 
+                    ci.firstname AS first_name, 
+                    ci.lastname AS last_name, 
                     la.cntry AS country, 
-                    ci.cst_marital_status AS marital_status, 
+                    ci.marital_status AS marital_status, 
                     CASE 
-                      WHEN ci.cst_gndr != 'n/a' THEN ci.cst_gndr 
+                      WHEN ci.gndr != 'n/a' THEN ci.cst_gndr 
                       ELSE COALESCE(ca.gen, 'n/a') 
                     END AS gender,
                     ca.bdate AS birthdate, 
-                    ci.cst_create_date AS create_date 
+                    ci.create_date AS create_date 
                   FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_cust_info` ci 
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.silver_erp_cust_az12` ca 
                     ON ci.cst_key = ca.cid 
