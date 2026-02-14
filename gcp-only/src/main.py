@@ -17,7 +17,7 @@ def process_data_pipeline(cloud_event):
     # --- 1. PARSE EVENT ---
     data = cloud_event.data
     bucket_name = data["bucket"]
-    file_path = data["name"]
+    file_path = str(data["name"])
     
     # Get Project ID from Environment Variable (Set by Terraform)                   #does it set env variables???
     project_id = os.environ.get('PROJECT_ID')
@@ -34,24 +34,25 @@ def process_data_pipeline(cloud_event):
     domain = None
     # --- 2. ROUTING LOGIC ---
     # Map filenames to Target Tables
-    if "raw_crm" in file_path:
+    flp = file_path.lower()
+    if "raw_crm" in flp:
         domain = "crm"
 
-        if "cust_info" in file_path:
+        if "cust_info" in flp:
             target_table = "bronze_crm_cust_info"
-        elif "prd_info" in file_path:
+        elif "prd_info" in flp:
             target_table = "bronze_crm_prod_info"
-        elif "sales_details" in file_path:
+        elif "sales_details" in flp:
             target_table = "bronze_crm_sales_details"
             
-    elif "raw_erp" in file_path:
+    elif "raw_erp" in flp:
         domain = "erp"
 
-        if "loc_a101" in file_path:
+        if "loc_a101" in flp:
             target_table = "bronze_erp_loc_a101"
-        elif "cust_az12" in file_path:
+        elif "cust_az12" in flp:
             target_table = "bronze_erp_cust_az12"
-        elif "cat_g1v2" in file_path:
+        elif "cat_g1v2" in flp:
             target_table = "bronze_px_cat_g1v2"
     else:
         logging.warning(f"SKIP: Unknown file pattern: {file_path}")
@@ -65,7 +66,7 @@ def process_data_pipeline(cloud_event):
     job_config = bigquery.LoadJobConfig(
         source_format=bigquery.SourceFormat.CSV,
         skip_leading_rows=1,
-        autodetect=True, # In Prod, we might use a predefined schema, but auto is fine for Bronze
+        autodetect=False, # In Prod, we might use a predefined schema, but auto is fine for Bronze
         write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
         allow_jagged_rows=True,
         allow_quoted_newlines=True
@@ -199,11 +200,11 @@ def generate_silver_sql(bronze_table_name, project_id):
         SELECT
             REPLACE(cid, '-', '') AS cid, 
             CASE
-                WHEN TRIM(country) = 'DE' THEN 'Germany'
-                WHEN TRIM(country) IN ('US', 'USA') THEN 'United States'
-                WHEN TRIM(country) = '' OR country IS NULL THEN 'n/a'
-                ELSE TRIM(country)
-            END AS country,
+                WHEN TRIM(cntry) = 'DE' THEN 'Germany'
+                WHEN TRIM(cntry) IN ('US', 'USA') THEN 'United States'
+                WHEN TRIM(cntry) = '' OR cntry IS NULL THEN 'n/a'
+                ELSE TRIM(cntry)
+            END AS cntry,
             CURRENT_DATETIME() AS dwh_create_date
         FROM `{project_id}.retail_bronze.bronze_erp_loc_a101`
         """

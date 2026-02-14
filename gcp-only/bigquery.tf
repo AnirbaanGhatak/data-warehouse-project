@@ -529,12 +529,12 @@ resource "google_bigquery_table" "gold_dim_customers" {
                     ROW_NUMBER() OVER (ORDER BY ci.cst_id) AS customer_key,
                     ci.cst_id AS customer_id, 
                     ci.cst_key AS customer_number, 
-                    ci.firstname AS first_name, 
-                    ci.lastname AS last_name, 
+                    ci.first_name AS first_name, 
+                    ci.last_name AS last_name, 
                     la.cntry AS country, 
                     ci.marital_status AS marital_status, 
                     CASE 
-                      WHEN ci.gndr != 'n/a' THEN ci.cst_gndr 
+                      WHEN ci.gender != 'n/a' THEN ci.gender 
                       ELSE COALESCE(ca.gen, 'n/a') 
                     END AS gender,
                     ca.bdate AS birthdate, 
@@ -569,20 +569,20 @@ resource "google_bigquery_table" "gold_dim_products" {
     # Make sure the closing 'EOF' is at the very start of the line.
     query = <<-EOF
                   SELECT
-                    ROW_NUMBER() OVER (ORDER BY pn.prd_start_dt, pn.prd_key) AS product_key,
+                    ROW_NUMBER() OVER (ORDER BY pn.start_date, pn.product_key) AS product_key,
                     pn.prd_id       AS product_id,
-                    pn.prd_key      AS product_number,
-                    pn.prd_nm       AS product_name,
-                    pn.cat_id       AS category_id,
+                    pn.product_key  AS product_number,
+                    pn.product_name AS product_name,
+                    pn.category_id  AS category_id,
                     pc.cat          AS category,
                     pc.subcat       AS subcategory,
                     pc.maintenance  AS maintenance,
-                    pn.prd_cost     AS cost,
-                    pn.prd_line     AS product_line,
-                    pn.prd_start_dt AS start_date
+                    pn.cost         AS cost,
+                    pn.product_line AS product_line,
+                    pn.start_date   AS start_date
                   FROM `${google_bigquery_dataset.silver_layer.dataset_id}.silver_crm_prod_info` pn
                   LEFT JOIN `${google_bigquery_dataset.silver_layer.dataset_id}.silver_px_cat_g1v2` pc
-                    ON pn.cat_id = pc.id
+                    ON pn.category_id = pc.id
                   WHERE pn.prd_end_dt IS NULL    
 EOF
   }
